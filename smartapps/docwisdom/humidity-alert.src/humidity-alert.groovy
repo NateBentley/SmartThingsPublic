@@ -25,77 +25,76 @@ definition(
 
 
 preferences {
-	section("Monitor the humidity of:") {
-		input "humiditySensor1", "capability.relativeHumidityMeasurement"
-	}
-	section("When the humidity rises above:") {
-		input "humidity1", "number", title: "Percentage ?"
-	}
+    section("Monitor the humidity of:") {
+        input "humiditySensor1", "capability.relativeHumidityMeasurement"
+    }
+    section("When the humidity rises above:") {
+        input "humidity1", "number", title: "Percentage ?"
+    }
     section("When the humidity falls below:") {
-		input "humidity2", "number", title: "Percentage ?"
-	}
+        input "humidity2", "number", title: "Percentage ?"
+    }
     section( "Notifications" ) {
         input "sendPushMessage", "enum", title: "Send a push notification?", metadata:[values:["Yes","No"]], required:false
         input "phone1", "phone", title: "Send a Text Message?", required: false
     }
-	section("Control this switch:") {
-		input "switch1", "capability.switch", required: false
-	}
+    section("Control this switch:") {
+        input "switch1", "capability.switch", required: false
+    }
 }
 
 def installed() {
-	subscribe(humiditySensor1, "humidity", humidityHandler)
+    subscribe(humiditySensor1, "humidity", humidityHandler)
 }
 
 def updated() {
-	unsubscribe()
-	subscribe(humiditySensor1, "humidity", humidityHandler)
+    unsubscribe()
+    subscribe(humiditySensor1, "humidity", humidityHandler)
 }
 
 def humidityHandler(evt) {
-	log.trace "humidity: ${evt.value}"
+    log.trace "humidity: ${evt.value}"
     log.trace "set point: ${humidity1}"
 
-	def currentHumidity = Double.parseDouble(evt.value.replace("%", ""))
-	def tooHumid = humidity1 
+    def currentHumidity = Double.parseDouble(evt.value.replace("%", ""))
+    def tooHumid = humidity1 
     def notHumidEnough = humidity2
-	def mySwitch = settings.switch1
-	def deltaMinutes = 10 
+    def mySwitch = settings.switch1
+    def deltaMinutes = 10 
     
     def timeAgo = new Date(now() - (1000 * 60 * deltaMinutes).toLong())
-	def recentEvents = humiditySensor1.eventsSince(timeAgo)
-	log.trace "Found ${recentEvents?.size() ?: 0} events in the last ${deltaMinutes} minutes"
-	def alreadySentSms = recentEvents.count { Double.parseDouble(it.value.replace("%", "")) >= tooHumid } > 1 || recentEvents.count { Double.parseDouble(it.value.replace("%", "")) <= notHumidEnough } > 1
+    def recentEvents = humiditySensor1.eventsSince(timeAgo)
+    log.trace "Found ${recentEvents?.size() ?: 0} events in the last ${deltaMinutes} minutes"
+    //def alreadySentSms = recentEvents.count { Double.parseDouble(it.value.replace("%", "")) >= tooHumid } > 1 || recentEvents.count { Double.parseDouble(it.value.replace("%", "")) <= notHumidEnough } > 1
+    def alreadySentSmsHigh = recentEvents.count { Double.parseDouble(it.value.replace("%", "")) >= tooHumid } > 1
+    def alreadySentSmsLow = recentEvents.count { Double.parseDouble(it.value.replace("%", "")) <= notHumidEnough } > 1
     
-	if (currentHumidity >= tooHumid) {
-		log.debug "Checking how long the humidity sensor has been reporting >= ${tooHumid}"
+    if (currentHumidity >= tooHumid) {
+        log.debug "Checking how long the humidity sensor has been reporting >= ${tooHumid}"
 
-		// Don't send a continuous stream of text messages
-		
-
-
-		if (alreadySentSms) {
-			log.debug "Notification already sent within the last ${deltaMinutes} minutes"
-			
-		} else {
-			log.debug "Humidity Rose Above ${tooHumid}:  sending SMS and activating ${mySwitch}"
-			send("${humiditySensor1.label} sensed high humidity level of ${evt.value}")
-			switch1?.on()
-		}
-	}
-
+        // Don't send a continuous stream of text messages
+        if (alreadySentSmsHigh) {
+            log.debug "Notification already sent within the last ${deltaMinutes} minutes"
+            
+        } else {
+            log.debug "Humidity Rose Above ${tooHumid}:  sending SMS and activating ${mySwitch}"
+            send("${humiditySensor1.label} sensed high humidity level of ${evt.value}")
+            switch1?.on()
+        }
+    }
+    
     if (currentHumidity <= notHumidEnough) {
-		log.debug "Checking how long the humidity sensor has been reporting <= ${notHumidEnough}"
+        log.debug "Checking how long the humidity sensor has been reporting <= ${notHumidEnough}"
 
-		if (alreadySentSms) {
-			log.debug "Notification already sent within the last ${deltaMinutes} minutes"
-			
-		} else {
-			log.debug "Humidity Fell Below ${notHumidEnough}:  sending SMS and activating ${mySwitch}"
-			send("${humiditySensor1.label} sensed high humidity level of ${evt.value}")
-			switch1?.off()
-		}
-	}
+        if (alreadySentSmsLow) {
+            log.debug "Notification already sent within the last ${deltaMinutes} minutes"
+            
+        } else {
+            log.debug "Humidity Fell Below ${notHumidEnough}:  sending SMS and activating ${mySwitch}"
+            send("${humiditySensor1.label} sensed high humidity level of ${evt.value}")
+            switch1?.off()
+        }
+    }
 }
 
 private send(msg) {
